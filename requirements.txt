@@ -6,3 +6,4 @@ seaborn
 numpy
 openpyxl
 python-dotenv
+gspread
