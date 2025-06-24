@@ -1,49 +1,20 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-import gspread
-import os
-import subprocess
-from oauth2client.service_account import ServiceAccountCredentials
 
 # CONFIGURACIÓN
-
-SHEET_URL = "https://docs.google.com/spreadsheets/d/11ntkguPaXrRHnZX9kNguLODWBjpupPz4s8gdbZ75_Ck/edit"
-SHEET_NAME = "Hoja 1"
-SERVICE_ACCOUNT_FILE = "credentials/credentials.json"  # o simplemente "credentials.json" si va en raíz
-RSCRIPT_PATH = "C:/Program Files/R/R-4.5.1/bin/Rscript.exe"  # Verifica que sea correcta
-SCRIPT_R = "r_scripts/actualizar_catapult.R"  # Esta sí está mal, cámbiala
-
-
-# FUNCIONES
-def safe_float(x):
-    try:
-        x = str(x).strip()
-        if "," in x:
-            x = x.replace(".", "").replace(",", ".")
-        return float(x)
-    except:
-        return 0.0
+SHEET_URL = "https://docs.google.com/spreadsheets/d/11ntkguPaXrRHnZX9kNguLODWBjpupPz4s8gdbZ75_Ck/export?format=csv&gid=0"
 
 @st.cache_data(ttl=600)
 def load_data():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_url(SHEET_URL)
-    ws = sheet.worksheet(SHEET_NAME)
-
-    data = ws.get_all_values()
-    headers, rows = data[0], data[1:]
-    df = pd.DataFrame(rows, columns=headers)
-
+    df = pd.read_csv(SHEET_URL)
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+    
     text_cols = ['date', 'day_type', 'session', 'athlete_name']
     numeric_cols = [col for col in df.columns if col not in text_cols]
 
     for col in numeric_cols:
-        df[col] = df[col].apply(safe_float)
-    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+        df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
 
 # INTERFAZ
@@ -57,42 +28,6 @@ st.markdown("""
         <h1 style="margin: 0;">📊 GPS Dashboard</h1>
     </div>
     """, unsafe_allow_html=True)
-# BOTONES
-with st.expander("🔄 Update Options"):
-    col1, col2 = st.columns(2)
-
-    with col1:
-        day_type = st.selectbox("📅 What is the day type?", ["MD", "MD-1", "MD-2", "MD-3", "MD-4", "MD-5", "MD+1", "MD+2", "PRE"])
-        day_tipe = st.text_input("🆚 Opponent") if day_type == "MD" else "TRAINING"
-
-        if st.button("🚀 Run R script (Catapult sync)"):
-
-            try:
-                with open("log_r_output.txt", "w", encoding="utf-8") as f_out, \
-                    open("log_r_error.txt", "w", encoding="utf-8") as f_err:
-
-                    env = {"DAY_TYPE": day_type, "DAY_TIPE": day_tipe, **os.environ}
-                    result = subprocess.run(
-                        [RSCRIPT_PATH, "--vanilla", SCRIPT_R],
-                        stdout=f_out, stderr=f_err, text=True, env=env
-                    )
-
-                if result.returncode == 0:
-                    st.success("✅ R script executed successfully.")
-                    with open("log_r_output.txt", "r", encoding="utf-8", errors="replace") as f:
-                        st.code(f.read())
-                else:
-                    st.error("❌ Error in R script.")
-                    with open("log_r_error.txt", "r", encoding="utf-8", errors="replace") as f:
-                        st.code(f.read())
-
-            except Exception as e:
-                st.error(f"Exception occurred: {str(e)}")
-
-    with col2:
-        if st.button("🔁 Refresh data from Google Sheets"):
-            st.cache_data.clear()
-            st.success("Data cache cleared. Reloading...")
 
 # CARGA DE DATOS
 df = load_data()
