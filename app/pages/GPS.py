@@ -6,16 +6,27 @@ import plotly.graph_objects as go
 SHEET_URL = "https://docs.google.com/spreadsheets/d/11ntkguPaXrRHnZX9kNguLODWBjpupPz4s8gdbZ75_Ck/"
 
 @st.cache_data(ttl=600)
+@st.cache_data(ttl=600)
 def load_data():
-    df = pd.read_csv(SHEET_URL)
+    df = pd.read_csv(SHEET_URL, dtype=str)
     df['date'] = pd.to_datetime(df['date'], errors='coerce')
-    
+
+    # Convertir texto a float manejando comas como decimales
+    def safe_float(x):
+        try:
+            x = str(x).replace(".", "").replace(",", ".")
+            return float(x)
+        except:
+            return 0.0
+
     text_cols = ['date', 'day_type', 'session', 'athlete_name']
     numeric_cols = [col for col in df.columns if col not in text_cols]
 
     for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-    return df.fillna(0)
+        df[col] = df[col].apply(safe_float)
+    
+    return df
+
 
 # INTERFAZ
 st.set_page_config(layout="wide", page_title="GPS Dashboard", page_icon="📈")
