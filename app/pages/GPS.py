@@ -15,7 +15,7 @@ def load_data():
 
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    return df
+    return df.fillna(0)
 
 # INTERFAZ
 st.set_page_config(layout="wide", page_title="GPS Dashboard", page_icon="📈")
@@ -29,16 +29,17 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# CARGA DE DATOS
+if st.button("🔁 Refresh data from Google Sheets"):
+    st.cache_data.clear()
+    st.experimental_rerun()
+
 df = load_data()
 
-# TABS
 tab1, tab2, tab3 = st.tabs(["📌 Session Report", "👤 Player Report", "📈 ACWR Summary"])
 
-# TAB 1 - Session Report
+# TAB 1
 with tab1:
     st.subheader("📅 Session Overview")
-
     dates = pd.to_datetime(df['date']).dt.date.unique()
     selected_date = st.selectbox("Select a session date", sorted(dates, reverse=True))
     sessions = df[pd.to_datetime(df['date']).dt.date == selected_date]['session'].dropna().unique()
@@ -46,87 +47,57 @@ with tab1:
 
     df_filtered = df[(pd.to_datetime(df['date']).dt.date == selected_date) & (df['session'] == selected_session)]
 
-    # 🔢 Sumatorios
+    # Sumatorios
     st.subheader("📌 Session Totals")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Distance", f"{int(df_filtered['total_distance'].sum())} m")
-        st.metric("MSR Distance", f"{int(df_filtered['MSR_dist'].sum())} m")
-        st.metric("HIR Distance", f"{int(df_filtered['hir_dist'].sum())} m")
+        st.metric("Total Distance", f"{int(df_filtered.get('total_distance', 0).sum())} m")
+        st.metric("MSR Distance", f"{int(df_filtered.get('MSR_dist', 0).sum())} m")
+        st.metric("HIR Distance", f"{int(df_filtered.get('hir_dist', 0).sum())} m")
     with col2:
-        st.metric("Sprint Distance", f"{int(df_filtered['Sprint_dist'].sum())} m")
-        st.metric("Acc >3", f"{int(df_filtered['acc_eff_3'].sum())}")
-        st.metric("Dcc >3", f"{int(df_filtered['dcc_eff_3'].sum())}")
+        st.metric("Sprint Distance", f"{int(df_filtered.get('Sprint_dist', 0).sum())} m")
+        st.metric("Acc >3", f"{int(df_filtered.get('acc_eff_3', 0).sum())}")
+        st.metric("Dcc >3", f"{int(df_filtered.get('dcc_eff_3', 0).sum())}")
     with col3:
-        st.metric("Total Duration", f"{int(df_filtered['total_duration'].mean())} min")
-        st.metric("Avg m/min", f"{df_filtered['m_min'].mean():.0f}")
+        st.metric("Total Duration", f"{int(df_filtered.get('total_duration', pd.Series([0])).mean())} min")
+        st.metric("Avg m/min", f"{df_filtered.get('m_min', pd.Series([0])).mean():.0f}")
 
-    #Alerta desequilibrio pisada
-    alerta = df_filtered[(df_filtered['por_desequilibrio_pisada'] < -10) | (df_filtered['por_desequilibrio_pisada'] > 10)]
-    if not alerta.empty:
-        alerta_texto = ", ".join(
-            f"{row['athlete_name']} ({row['por_desequilibrio_pisada']:.1f})"
-            for _, row in alerta.iterrows()
-        )
-        st.warning(f"⚠️ Players with abnormal footstrike imbalance (< -10 or > 10): {alerta_texto}")
+    # Alerta pisada
+    if 'por_desequilibrio_pisada' in df_filtered.columns:
+        alerta = df_filtered[(df_filtered['por_desequilibrio_pisada'] < -10) | (df_filtered['por_desequilibrio_pisada'] > 10)]
+        if not alerta.empty:
+            alerta_texto = ", ".join(
+                f"{row['athlete_name']} ({row['por_desequilibrio_pisada']:.1f})"
+                for _, row in alerta.iterrows()
+            )
+            st.warning(f"⚠️ Players with abnormal footstrike imbalance: {alerta_texto}")
 
+    # 📊 Gráficos
+    def bar_scatter(y1, y2, name1, name2, ytitle1, ytitle2):
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=df_filtered['athlete_name'], y=df_filtered[y1],
+                             name=name1, text=df_filtered[y1].astype(int), textposition='outside'))
+        fig.add_trace(go.Scatter(x=df_filtered['athlete_name'], y=df_filtered[y2],
+                                 name=name2, yaxis='y2', mode='lines+markers+text',
+                                 text=df_filtered[y2].round(0).astype(int), textposition='top center'))
+        fig.update_layout(yaxis=dict(title=ytitle1),
+                          yaxis2=dict(title=ytitle2, overlaying='y', side='right'),
+                          height=400)
+        st.plotly_chart(fig, use_container_width=True)
 
-    # 📊 Distancia y m/min
     st.subheader("Total Distance and m/min")
-    fig1 = go.Figure()
-    fig1.add_trace(go.Bar(x=df_filtered['athlete_name'], y=df_filtered['total_distance'],
-                          name='Distance (m)', text=df_filtered['total_distance'].astype(int),
-                          textposition='outside'))
-    fig1.add_trace(go.Scatter(x=df_filtered['athlete_name'], y=df_filtered['m_min'],
-                              name='m/min', yaxis='y2', mode='lines+markers+text',
-                              text=df_filtered['m_min'].round(0).astype(int), textposition='top center'))
-    fig1.update_layout(yaxis=dict(title="Distance (m)"),
-                       yaxis2=dict(title="m/min", overlaying="y", side="right"),
-                       height=400)
-    st.plotly_chart(fig1, use_container_width=True)
+    if 'total_distance' in df_filtered and 'm_min' in df_filtered:
+        bar_scatter('total_distance', 'm_min', 'Distance (m)', 'm/min', 'Distance (m)', 'm/min')
 
-    # ⚡ Velocidad máxima y % max
     st.subheader("Top Speed and % Max Speed")
-    fig2 = go.Figure()
-    fig2.add_trace(go.Bar(x=df_filtered['athlete_name'], y=df_filtered['max_speed'],
-                          name='Max Speed (km/h)', text=df_filtered['max_speed'].round(0).astype(int),
-                          textposition='outside'))
-    fig2.add_trace(go.Scatter(x=df_filtered['athlete_name'], y=(df_filtered['por_vel'] * 100),
-                              name='% Max Speed', yaxis='y2', mode='lines+markers+text',
-                              text=(df_filtered['por_vel'] * 100).round(0).astype(int),
-                              textposition='top center'))
-    fig2.update_layout(yaxis=dict(title="Speed (km/h)"),
-                       yaxis2=dict(title="% Max", overlaying="y", side="right"),
-                       height=400)
-    st.plotly_chart(fig2, use_container_width=True)
+    if 'max_speed' in df_filtered and 'por_vel' in df_filtered:
+        bar_scatter('max_speed', 'por_vel', 'Max Speed (km/h)', '% Max Speed', 'Speed', '%')
 
-    # 📈 MSR, HIR y Sprint
-    st.subheader("MSR, HIR and Sprint Distance")
-    fig3 = go.Figure(data=[
-        go.Bar(name='MSR', x=df_filtered['athlete_name'], y=df_filtered['MSR_dist'],
-               text=df_filtered['MSR_dist'].astype(int), textposition='outside'),
-        go.Bar(name='HIR', x=df_filtered['athlete_name'], y=df_filtered['hir_dist'],
-               text=df_filtered['hir_dist'].astype(int), textposition='outside'),
-        go.Bar(name='Sprint', x=df_filtered['athlete_name'], y=df_filtered['Sprint_dist'],
-               text=df_filtered['Sprint_dist'].astype(int), textposition='outside')
-    ])
-    fig3.update_layout(barmode='group', height=400)
-    st.plotly_chart(fig3, use_container_width=True)
-
-    # 🦵 Aceleraciones y frenadas
-    st.subheader("Accelerations and Decelerations >3")
-    fig4 = go.Figure(data=[
-        go.Bar(name='Acc >3', x=df_filtered['athlete_name'], y=df_filtered['acc_eff_3'],
-               text=df_filtered['acc_eff_3'].astype(int), textposition='outside'),
-        go.Bar(name='Dcc >3', x=df_filtered['athlete_name'], y=df_filtered['dcc_eff_3'],
-               text=df_filtered['dcc_eff_3'].astype(int), textposition='outside'),
-    ])
-    fig4.update_layout(barmode='group', height=400)
-    st.plotly_chart(fig4, use_container_width=True)
-
-    # 📋 Tabla
+    # Tabla final
     st.subheader("📋 Table")
-    st.dataframe(df_filtered[['athlete_name', 'total_distance', 'm_min', 'Sprint_dist', 'acc_eff_3', 'dcc_eff_3', 'por_vel']].sort_values(by='m_min', ascending=False), use_container_width=True)
+    st.dataframe(df_filtered, use_container_width=True)
+
+# TAB 2 y 3 los puedes copiar igual si no hay cambios en estructura
 
 
 # TAB 2 - Player Report
