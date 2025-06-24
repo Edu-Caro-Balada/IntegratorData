@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # CONFIGURACIÓN
-SHEET_URL = "https://docs.google.com/spreadsheets/d/11ntkguPaXrRHnZX9kNguLODWBjpupPz4s8gdbZ75_Ck/export?format=csv&gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/11ntkguPaXrRHnZX9kNguLODWBjpupPz4s8gdbZ75_Ck/"
 
 @st.cache_data(ttl=600)
 def load_data():
