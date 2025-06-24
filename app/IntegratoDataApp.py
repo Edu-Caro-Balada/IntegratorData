@@ -60,4 +60,4 @@ st.markdown("""
 
 # Footer
 st.markdown("---")
-st.caption("Developed by Edu Caro • Performance Science Department")
+st.caption("Developed by Edu Caro")

@@ -8,11 +8,13 @@ import subprocess
 from oauth2client.service_account import ServiceAccountCredentials
 
 # CONFIGURACIÓN
-SERVICE_ACCOUNT_FILE = "C:/Users/Catapult/Desktop/Integrator Data App/credentials.json"
+
 SHEET_URL = "https://docs.google.com/spreadsheets/d/11ntkguPaXrRHnZX9kNguLODWBjpupPz4s8gdbZ75_Ck/edit"
 SHEET_NAME = "Hoja 1"
-RSCRIPT_PATH = "C:/Program Files/R/R-4.5.1/bin/Rscript.exe"
-SCRIPT_R = "pages/actualizar_catapult.R"
+SERVICE_ACCOUNT_FILE = "credentials/credentials.json"  # o simplemente "credentials.json" si va en raíz
+RSCRIPT_PATH = "C:/Program Files/R/R-4.5.1/bin/Rscript.exe"  # Verifica que sea correcta
+SCRIPT_R = "r_scripts/actualizar_catapult.R"  # Esta sí está mal, cámbiala
+
 
 # FUNCIONES
 def safe_float(x):

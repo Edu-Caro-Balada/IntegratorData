@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import plotly.express as px
-
+import os 
 st.set_page_config(layout="wide",page_icon="💆‍♂️")
 
 # Logo y titulo
@@ -129,7 +129,11 @@ region_coords = {
 region_counts = df_range["PLACE"].dropna().value_counts()
 
 # Cargar imagen base
-body_img = Image.open("assets/body_map.png")
+
+script_dir = os.path.dirname(__file__)
+img_path = os.path.join(script_dir, "..", "assets", "body_map.png")
+body_img = Image.open(img_path)
+
 
 fig, ax = plt.subplots(figsize=(4, 6))
 ax.imshow(body_img)
